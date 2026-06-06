@@ -288,14 +288,33 @@ header p{font-size:10px;color:rgba(200,137,42,0.5);letter-spacing:0.18em;margin-
 <!-- Toast -->
 <div id="toast"></div>
 
-<script>
-// ── Data (localStorage — same pattern as Greetings_8) ────────
-const KEY = 'sat_sri_akal_v1';
-let data = JSON.parse(localStorage.getItem(KEY) || 'null');
-if (!data) {
-  data = { slots: Array.from({length:10}, () => ({name:'', pendingFrom:null})) };
+<script type="module">
+// ── Firebase ──────────────────────────────────────────────────
+import { initializeApp }
+  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getDatabase, ref, onValue, set }
+  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+
+const firebaseConfig = {
+  apiKey:            "AIzaSyATlCzZuSt7yGRvZ31d13ktTpP3ORWol5k",
+  authDomain:        "sat-sri-akal-45ac5.firebaseapp.com",
+  databaseURL:       "https://sat-sri-akal-45ac5-default-rtdb.firebaseio.com",
+  projectId:         "sat-sri-akal-45ac5",
+  storageBucket:     "sat-sri-akal-45ac5.firebasestorage.app",
+  messagingSenderId: "1006252082809",
+  appId:             "1:1006252082809:web:6a838a71fb2e341e23b6a8"
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const db    = getDatabase(fbApp);
+const SLOTS = ref(db, 'ssa/slots');
+
+// ── Data ──────────────────────────────────────────────────────
+let data = { slots: Array.from({length:10}, () => ({name:'', pendingFrom:null})) };
+
+function save() {
+  set(SLOTS, data.slots);
 }
-function save() { localStorage.setItem(KEY, JSON.stringify(data)); }
 
 // ── State ────────────────────────────────────────────────────
 let mySlot = parseInt(localStorage.getItem('ssa_my') ?? '-1');
@@ -405,7 +424,7 @@ function render() {
         mySlot = -1;
         localStorage.removeItem('ssa_my');
         returnTarget = -1;
-        save(); render();
+        save();
         toast('You have left the circle 🙏');
       });
     }
@@ -431,7 +450,8 @@ document.getElementById('cok').addEventListener('click', () => {
   data.slots[claimingSlot] = {name: n, pendingFrom: null};
   mySlot = claimingSlot;
   localStorage.setItem('ssa_my', claimingSlot);
-  save(); closeClaim(); render();
+  save(); closeClaim();
+  toast('Sat Sri Akal, ' + n + ' 🙏');
   toast('Sat Sri Akal, ' + n + ' 🙏');
 });
 document.getElementById('ccancel').addEventListener('click', closeClaim);
@@ -522,8 +542,25 @@ if ('serviceWorker' in navigator) {
   }).catch(e => console.warn('SW:', e));
 }
 
-// ── RENDER (immediate, just like Greetings_8) ─────────────────
+// ── Firebase live listener ───────────────────────────────────
+// Render immediately from local state first (instant UI)
 render();
+
+// Then sync from Firebase — updates all phones in real time
+onValue(SLOTS, snap => {
+  const val = snap.val();
+  if (Array.isArray(val)) {
+    // Merge: preserve local mySlot identity
+    data.slots = val.map((s, i) => s ?? {name:'', pendingFrom:null});
+    render();
+  } else {
+    // Firebase empty — push our local state up
+    save();
+  }
+}, err => {
+  // Offline — local render already done above, carry on
+  console.warn('Firebase offline:', err);
+});
 </script>
 </body>
 </html>
