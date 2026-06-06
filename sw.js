@@ -1,7 +1,7 @@
 // Sat Sri Akal — Service Worker
 // Handles: PWA caching + daily 8PM IST ੴ Simran notification
 
-const CACHE = 'sat-sri-akal-v1';
+const CACHE = 'sat-sri-akal-v2';
 const ASSETS = ['./index.html', './manifest.json'];
 
 // ── Install: cache core assets ──────────────────────────────────────────────
