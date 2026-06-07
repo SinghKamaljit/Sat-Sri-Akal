@@ -803,10 +803,16 @@ window.addEventListener('offline', () => toast('Offline — greetings will sync 
 
 // ── Service Worker ────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
+  // Unregister any old SW that might be serving stale cache
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    const old = regs.filter(r => !r.active?.scriptURL?.includes('sw.js'));
+    old.forEach(r => r.unregister());
+  });
+
   navigator.serviceWorker.register('./sw.js')
     .then(reg => {
       reg.active?.postMessage('SCHEDULE_SIMRAN');
-      // When a new SW activates, reload automatically for fresh cache
+      // Auto-reload when new SW activates
       navigator.serviceWorker.addEventListener('message', e => {
         if (e.data === 'SW_UPDATED') window.location.reload();
       });

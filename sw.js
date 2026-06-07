@@ -1,70 +1,83 @@
-// Sat Sri Akal — Service Worker
-// Handles: PWA caching + daily 8PM IST ੴ Simran notification
+// Sat Sri Akal — Service Worker v8
+// Strategy: Network-first for HTML, cache-first for everything else
+// index.html is NEVER cached — always fetched fresh from network
+// This ensures every update is immediately visible without manual refresh
 
-const CACHE = 'sat-sri-akal-v7';
-const ASSETS = ['./index.html', './manifest.json'];
+const CACHE = 'sat-sri-akal-v8';
+const NEVER_CACHE = ['index.html', '/Sat-Sri-Akal/', '/Sat-Sri-Akal/index.html'];
 
-// ── Install: cache core assets ──────────────────────────────────────────────
+// ── Install: skip waiting immediately, take control ─────────────────────────
 self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(ASSETS))
-  );
-  self.skipWaiting();
+  self.skipWaiting(); // activate immediately, don't wait
 });
 
-// ── Activate: clear old caches + force reload all clients ────────────────────
+// ── Activate: wipe ALL old caches, claim all clients ────────────────────────
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(
-        keys.filter(k => k !== CACHE).map(k => caches.delete(k))
-      ))
+      .then(keys => Promise.all(keys.map(k => caches.delete(k)))) // delete ALL
+      .then(() => self.clients.claim())
       .then(() => self.clients.matchAll({type:'window', includeUncontrolled:true}))
       .then(clients => clients.forEach(c => c.postMessage('SW_UPDATED')))
   );
-  self.clients.claim();
   scheduleDailySimran();
 });
 
-// ── Fetch: serve from cache, fallback to network ────────────────────────────
+// ── Fetch strategy ───────────────────────────────────────────────────────────
 self.addEventListener('fetch', e => {
-  e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request))
-  );
+  const url = new URL(e.request.url);
+  const isHTML = NEVER_CACHE.some(p => url.pathname.endsWith(p))
+               || url.pathname === '/Sat-Sri-Akal/'
+               || e.request.headers.get('accept')?.includes('text/html');
+
+  if (isHTML) {
+    // HTML — always network, never cache
+    e.respondWith(
+      fetch(e.request).catch(() => caches.match('./index.html'))
+    );
+  } else {
+    // Everything else — cache first, fallback to network, then cache it
+    e.respondWith(
+      caches.match(e.request).then(cached => {
+        if (cached) return cached;
+        return fetch(e.request).then(response => {
+          // Only cache valid responses
+          if (response && response.status === 200 && response.type !== 'opaque') {
+            const clone = response.clone();
+            caches.open(CACHE).then(c => c.put(e.request, clone));
+          }
+          return response;
+        });
+      })
+    );
+  }
 });
 
 // ── Notification click: open the app ────────────────────────────────────────
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   e.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    clients.matchAll({type:'window', includeUncontrolled:true}).then(list => {
       if (list.length) return list[0].focus();
       return clients.openWindow('./index.html');
     })
   );
 });
 
-// ── Message from app: reschedule if needed ───────────────────────────────────
+// ── Message from app ─────────────────────────────────────────────────────────
 self.addEventListener('message', e => {
   if (e.data === 'SCHEDULE_SIMRAN') scheduleDailySimran();
 });
 
-// ── Daily Simran Scheduler ───────────────────────────────────────────────────
-// Fires every day at 20:00 IST (UTC+5:30 = 14:30 UTC)
+// ── Daily Simran at 8 PM IST (14:30 UTC) ────────────────────────────────────
 function scheduleDailySimran() {
-  const now = new Date();
-  // Target: 20:00 IST = 14:30 UTC
+  const now    = new Date();
   const target = new Date();
   target.setUTCHours(14, 30, 0, 0);
-
-  // If 8 PM IST already passed today, schedule for tomorrow
   if (target <= now) target.setUTCDate(target.getUTCDate() + 1);
-
   const delay = target.getTime() - now.getTime();
-
   setTimeout(() => {
     fireSimranNotification();
-    // Reschedule for next day
     setInterval(fireSimranNotification, 24 * 60 * 60 * 1000);
   }, delay);
 }
@@ -74,7 +87,7 @@ function fireSimranNotification() {
     body: 'Satnam Waheguru 🙏',
     icon: './icon-192.png',
     badge: './icon-192.png',
-    tag: 'daily-simran',          // replaces itself, never stacks
+    tag: 'daily-simran',
     renotify: false,
     silent: false,
     vibrate: [200, 100, 200]
