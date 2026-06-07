@@ -448,12 +448,9 @@ header h1{
 <!-- Toast -->
 <div id="toast"></div>
 
-<script type="module">
-import { initializeApp }
-  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getDatabase, ref, onValue, set }
-  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
-
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script>
 const firebaseConfig = {
   apiKey:            "AIzaSyATlCzZuSt7yGRvZ31d13ktTpP3ORWol5k",
   authDomain:        "sat-sri-akal-45ac5.firebaseapp.com",
@@ -463,14 +460,14 @@ const firebaseConfig = {
   messagingSenderId: "1006252082809",
   appId:             "1:1006252082809:web:6a838a71fb2e341e23b6a8"
 };
-const fbApp = initializeApp(firebaseConfig);
-const db    = getDatabase(fbApp);
-const SLOTS = ref(db, 'ssa/slots');
+firebase.initializeApp(firebaseConfig);
+const db    = firebase.database();
+const SLOTS = db.ref('ssa/slots');
 
 // ── Data ─────────────────────────────────────────────────────
 // Each slot: { name, greetings: [{from, ts}] }
 let data = { slots: Array.from({length:10}, () => ({name:'', uid:null, greetings:[]})) };
-function save() { set(SLOTS, data.slots); }
+function save() { SLOTS.set(data.slots); }
 
 // ── State ────────────────────────────────────────────────────
 let mySlot       = -1;   // resolved from Firebase by uid
@@ -937,14 +934,14 @@ document.getElementById('gcopylink').addEventListener('click', () => {
 // ── Firebase listener ─────────────────────────────────────────
 render(); // immediate
 
-onValue(SLOTS, snap => {
+SLOTS.on('value', snap => {
   const val = snap.val();
   if (Array.isArray(val)) {
     data.slots = val.map(s => s
       ? { name: s.name || '', uid: s.uid || null,
           greetings: Array.isArray(s.greetings) ? s.greetings : [] }
       : {name:'', uid:null, greetings:[]});
-    resolveMySlot(); // auto-identify this device's slot from uid
+    resolveMySlot();
   } else {
     save();
   }
