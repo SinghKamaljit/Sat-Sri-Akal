@@ -934,18 +934,42 @@ document.getElementById('gcopylink').addEventListener('click', () => {
 // ── Firebase listener ─────────────────────────────────────────
 render(); // immediate
 
+// ── Firebase listener ────────────────────────────────────────
+render(); // immediate skeleton render
+
 SLOTS.on('value', snap => {
-  const val = snap.val();
-  if (Array.isArray(val)) {
-    data.slots = val.map(s => s
-      ? { name: s.name || '', uid: s.uid || null,
-          greetings: Array.isArray(s.greetings) ? s.greetings : [] }
-      : {name:'', uid:null, greetings:[]});
+  try {
+    const val = snap.val();
+
+    // Handle both array and sparse object (Firebase drops array when keys skip)
+    let rawList = [];
+    if (Array.isArray(val)) {
+      rawList = val;
+    } else if (val && typeof val === 'object') {
+      Object.keys(val).forEach(key => {
+        const idx = parseInt(key, 10);
+        if (!isNaN(idx)) rawList[idx] = val[key];
+      });
+    }
+
+    // Build clean 10-slot array — no syntax ambiguity, no spread
+    data.slots = Array.from({length: Math.max(10, rawList.length)}, (_, i) => {
+      const s = rawList[i];
+      if (!s) return {name:'', uid:null, greetings:[]};
+      return {
+        name:      s.name      || '',
+        uid:       s.uid       || null,
+        greetings: Array.isArray(s.greetings) ? s.greetings : []
+      };
+    });
+
     resolveMySlot();
-  } else {
-    save();
+    render();
+
+  } catch(err) {
+    console.error('Firebase snapshot error:', err);
+    render(); // still render local state even if Firebase fails
   }
-  render();
 }, err => console.warn('Firebase offline:', err));
 
 </script>
