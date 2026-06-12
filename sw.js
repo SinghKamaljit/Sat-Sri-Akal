@@ -3,7 +3,7 @@
 // index.html is NEVER cached — always fetched fresh from network
 // This ensures every update is immediately visible without manual refresh
 
-const CACHE = 'sat-sri-akal-v12';
+const CACHE = 'sat-sri-akal-v13';
 const NEVER_CACHE = ['index.html', '/Sat-Sri-Akal/', '/Sat-Sri-Akal/index.html'];
 
 // ── Install: skip waiting immediately, take control ─────────────────────────

@@ -244,6 +244,46 @@ header h1{
 }
 #toast.on{opacity:1}
 
+/* ── Tap your name banner ── */
+#claimbanner{
+  display:none;
+  background:rgba(200,137,42,0.15);
+  border-bottom:1px solid rgba(200,137,42,0.25);
+  text-align:center;padding:8px 16px;
+  font-size:11px;color:#c8892a;
+  letter-spacing:0.06em;
+  cursor:default;
+}
+
+/* ── Is this you? overlay ── */
+#isyou{
+  display:none;position:fixed;inset:0;z-index:70;
+  background:rgba(8,3,0,0.85);backdrop-filter:blur(5px);
+  align-items:center;justify-content:center;
+}
+#isyou.on{display:flex}
+#iybox{
+  background:#fdf6e3;border-radius:18px;
+  padding:26px 22px;width:86%;max-width:320px;
+  text-align:center;animation:pop2 0.18s ease;
+}
+#iymsg{
+  font-family:'Cinzel',serif;font-size:15px;
+  color:#1a0800;margin-bottom:6px;
+}
+#iysub{font-size:11px;color:rgba(26,8,0,0.45);margin-bottom:18px;}
+#iyyes{
+  width:100%;background:#c8892a;color:#fff;
+  border:none;border-radius:9px;padding:11px;
+  font-family:'Cinzel',serif;font-size:13px;
+  font-weight:700;cursor:pointer;margin-bottom:8px;
+}
+#iyno{
+  width:100%;background:none;border:none;
+  color:rgba(26,8,0,0.35);font-size:12px;
+  cursor:pointer;padding:5px;
+}
+
 /* ── Gear button ── */
 #gearbtn{
   position:absolute;top:50%;right:14px;transform:translateY(-50%);
@@ -398,6 +438,19 @@ header h1{
   <button id="sreturn" style="display:none">🙏 Return Greeting</button>
 </div>
 
+<!-- Tap your name banner -->
+<div id="claimbanner">👆 Tap your name to activate your slot</div>
+
+<!-- Is this you? overlay -->
+<div id="isyou">
+  <div id="iybox">
+    <div id="iymsg"></div>
+    <div id="iysub">Tap Yes to activate your slot on this device</div>
+    <button id="iyyes">Yes, this is me 🙏</button>
+    <button id="iyno">No, not me</button>
+  </div>
+</div>
+
 <!-- ⚙️ Gear / Rescue Panel -->
 <div id="gear">
   <div id="gbox">
@@ -533,26 +586,67 @@ if (!myUid) {
 }
 
 function resolveMySlot() {
-  // 1. Try uid match first (normal case)
+  // 1. Try uid match (normal case after first claim)
   const byUid = data.slots.findIndex(s => s && s.uid === myUid);
   if (byUid >= 0) {
     mySlot = byUid;
     localStorage.setItem('ssa_my', mySlot);
+    hideBanner();
     return;
   }
 
-  // 2. Try saved slot index — if name still matches, silently re-link uid
+  // 2. Try saved slot index from localStorage
   const savedIdx = parseInt(localStorage.getItem('ssa_my') ?? '-1');
   if (savedIdx >= 0 && data.slots[savedIdx] && data.slots[savedIdx].name) {
     mySlot = savedIdx;
-    data.slots[savedIdx].uid = myUid; // re-link this device silently
+    data.slots[savedIdx].uid = myUid;
     window._fbSlots && window._fbSlots.set(data.slots);
+    hideBanner();
     return;
   }
 
-  // 3. No match found
+  // 3. Nothing matched — show tap-your-name banner
   mySlot = -1;
+  // Only show banner if there are claimed slots (someone to identify as)
+  const hasClaimed = data.slots.some(s => s && s.name);
+  if (hasClaimed) showBanner();
+  else hideBanner();
 }
+
+function showBanner() {
+  const b = document.getElementById('claimbanner');
+  if (b) b.style.display = 'block';
+}
+function hideBanner() {
+  const b = document.getElementById('claimbanner');
+  if (b) b.style.display = 'none';
+}
+
+// Is-this-you overlay
+let isYouTargetIdx = -1;
+function openIsYou(idx) {
+  isYouTargetIdx = idx;
+  document.getElementById('iymsg').textContent =
+    'Are you ' + data.slots[idx].name + '?';
+  document.getElementById('isyou').classList.add('on');
+}
+function closeIsYou() {
+  document.getElementById('isyou').classList.remove('on');
+  isYouTargetIdx = -1;
+}
+document.getElementById('iyyes').addEventListener('click', () => {
+  if (isYouTargetIdx < 0) return;
+  // Write uid into this slot in Firebase
+  data.slots[isYouTargetIdx].uid = myUid;
+  mySlot = isYouTargetIdx;
+  localStorage.setItem('ssa_my', isYouTargetIdx);
+  window._fbSlots && window._fbSlots.set(data.slots);
+  closeIsYou();
+  hideBanner();
+  render();
+  toast('Sat Sri Akal, ' + data.slots[isYouTargetIdx].name + ' 🙏');
+});
+document.getElementById('iyno').addEventListener('click', closeIsYou);
 
 // ═══════════════════════════════════════════════════════════
 // AUDIO
@@ -658,6 +752,15 @@ function render() {
         const isMe      = (i === mySlot);
 
         card.className = 'card claimed' + (hasG ? ' has-g' : '');
+
+        // If unrecognised, tapping card asks "is this you?"
+        if (mySlot < 0) {
+          card.style.cursor = 'pointer';
+          card.addEventListener('click', e => {
+            if (e.target.classList.contains('btn')) return;
+            openIsYou(i);
+          });
+        }
 
         const recvLit  = (hasG && isMe) ? ' lit' : '';
         const cntBadge = (hasG && isMe) ? '<span class="bcnt">'+gCount+'</span>' : '';
