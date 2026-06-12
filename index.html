@@ -533,13 +533,25 @@ if (!myUid) {
 }
 
 function resolveMySlot() {
-  const found = data.slots.findIndex(s => s && s.uid === myUid);
-  if (found >= 0) {
-    mySlot = found;
+  // 1. Try uid match first (normal case)
+  const byUid = data.slots.findIndex(s => s && s.uid === myUid);
+  if (byUid >= 0) {
+    mySlot = byUid;
     localStorage.setItem('ssa_my', mySlot);
-  } else {
-    mySlot = -1;
+    return;
   }
+
+  // 2. Try saved slot index — if name still matches, silently re-link uid
+  const savedIdx = parseInt(localStorage.getItem('ssa_my') ?? '-1');
+  if (savedIdx >= 0 && data.slots[savedIdx] && data.slots[savedIdx].name) {
+    mySlot = savedIdx;
+    data.slots[savedIdx].uid = myUid; // re-link this device silently
+    window._fbSlots && window._fbSlots.set(data.slots);
+    return;
+  }
+
+  // 3. No match found
+  mySlot = -1;
 }
 
 // ═══════════════════════════════════════════════════════════
